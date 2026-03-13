@@ -12,14 +12,17 @@ REQUIRED_COLUMNS = {
     "inventory_end": ["자재코드", "자재명", "현재고", "현재고금액"],
 }
 
+
 def validate_filename(file_name: str) -> tuple[str, str]:
     return parse_filename(file_name)
+
 
 def validate_required_columns(df: pd.DataFrame, dataset_type: str) -> list[str]:
     missing = [col for col in REQUIRED_COLUMNS[dataset_type] if col not in df.columns]
     return missing
 
-def validate_no_empty_keys(df: pd.DataFrame, dataset_type: str) -> list[str]:
+
+def drop_empty_keys(df: pd.DataFrame, dataset_type: str) -> tuple[pd.DataFrame, list[str]]:
     key_map = {
         "receipt_performance": ["단품코드"],
         "material_cost": ["코드"],
@@ -28,18 +31,39 @@ def validate_no_empty_keys(df: pd.DataFrame, dataset_type: str) -> list[str]:
         "inventory_begin": ["자재코드"],
         "inventory_end": ["자재코드"],
     }
-    problems = []
-    for col in key_map[dataset_type]:
-        if df[col].isna().any():
-            problems.append(f"필수 키 컬럼 '{col}'에 빈 값이 있습니다.")
-    return problems
+
+    key_cols = key_map[dataset_type]
+    working_df = df.copy()
+
+    # 빈 문자열을 NaN처럼 취급
+    for col in key_cols:
+        if col in working_df.columns:
+            working_df[col] = working_df[col].replace(r"^\s*$", pd.NA, regex=True)
+
+    original_rows = len(working_df)
+    cleaned_df = working_df.dropna(subset=key_cols).copy()
+    removed_rows = original_rows - len(cleaned_df)
+
+    messages = []
+    if removed_rows > 0:
+        messages.append(f"필수 키 컬럼 빈 값 {removed_rows}행 자동 제거")
+
+    return cleaned_df, messages
+
 
 def summarize_validation(df: pd.DataFrame, dataset_type: str) -> dict:
     missing = validate_required_columns(df, dataset_type)
-    key_issues = validate_no_empty_keys(df, dataset_type) if not missing else []
+
+    cleaned_df = df.copy()
+    key_issues: list[str] = []
+
+    if not missing:
+        cleaned_df, key_issues = drop_empty_keys(df, dataset_type)
+
     return {
-        "row_count": len(df),
+        "row_count": len(cleaned_df),
         "missing_columns": missing,
         "key_issues": key_issues,
-        "ok": len(missing) == 0 and len(key_issues) == 0,
+        "ok": len(missing) == 0,
+        "cleaned_df": cleaned_df,
     }
