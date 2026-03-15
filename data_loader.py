@@ -8,10 +8,23 @@ from config import supabase_enabled
 
 LOCAL_DATA_DIR = Path("data")
 
+_DATASET_KEYS = [
+    "receipt_performance",
+    "material_cost",
+    "bom",
+    "purchase",
+    "inventory_begin",
+    "inventory_end",
+]
+
+
+def _empty_dataset() -> dict[str, pd.DataFrame]:
+    return {k: pd.DataFrame() for k in _DATASET_KEYS}
+
 
 def load_local_raw_files() -> dict[str, pd.DataFrame]:
     if not LOCAL_DATA_DIR.exists():
-        return {}
+        return _empty_dataset()
     result: dict[str, list[pd.DataFrame]] = {}
     for path in LOCAL_DATA_DIR.glob("*.csv"):
         try:
@@ -22,19 +35,30 @@ def load_local_raw_files() -> dict[str, pd.DataFrame]:
         except Exception:
             continue
     merged = {k: pd.concat(v, ignore_index=True) for k, v in result.items()}
+    # Fill missing keys with empty DataFrames
+    for k in _DATASET_KEYS:
+        merged.setdefault(k, pd.DataFrame())
     return merged
 
 
 def load_standardized_data() -> dict[str, pd.DataFrame]:
     if supabase_enabled():
-        # Lazy import so the app starts even if supabase-py has issues at import time
-        from supabase_client import fetch_table
-        return {
-            "receipt_performance": fetch_table("receipt_performance"),
-            "material_cost": fetch_table("material_cost"),
-            "bom": fetch_table("bom_monthly"),
-            "purchase": fetch_table("purchase"),
-            "inventory_begin": fetch_table("inventory_begin"),
-            "inventory_end": fetch_table("inventory_end"),
-        }
+        try:
+            from supabase_client import fetch_table
+            return {
+                "receipt_performance": fetch_table("receipt_performance"),
+                "material_cost": fetch_table("material_cost"),
+                "bom": fetch_table("bom_monthly"),
+                "purchase": fetch_table("purchase"),
+                "inventory_begin": fetch_table("inventory_begin"),
+                "inventory_end": fetch_table("inventory_end"),
+            }
+        except Exception as e:
+            import streamlit as st
+            st.warning(
+                f"⚠️ Supabase 연결 실패: {e}\n\n"
+                "Secrets의 SUPABASE_URL / SUPABASE_KEY를 확인하거나, "
+                "로컬 CSV 파일을 `data/` 폴더에 넣어 주세요."
+            )
+            return _empty_dataset()
     return load_local_raw_files()
