@@ -53,12 +53,22 @@ def standardize_material_cost(df: pd.DataFrame, month: str, source_file_name: st
     return out
 
 def standardize_bom(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # product_id: 단품컬러가 있으면 단품코드+단품컬러 조합, 없으면 단품코드만
+    if "단품컬러" in df.columns:
+        product_id = (
+            normalize_text(df["단품코드"]).fillna("") +
+            normalize_text(df["단품컬러"]).fillna("")
+        )
+    else:
+        product_id = normalize_text(df["단품코드"])
+
     out = pd.DataFrame({
         "month": month,
-        "product_id": normalize_text(df["단품코드"]),
+        "product_id": product_id,
         "material_id": normalize_text(df["자재코드"]),
         "material_name": normalize_text(df["자재명칭"]),
         "material_group": normalize_text(df["자재구분"]) if "자재구분" in df.columns else None,
+        "usage_type": normalize_text(df["사용구분"]) if "사용구분" in df.columns else None,
         "unit_cost": to_number(df["자재단가"]) if "자재단가" in df.columns else None,
         "unit_qty": to_number(df["소요량"]),
         "bom_amount": to_number(df["금액"]) if "금액" in df.columns else None,
@@ -67,6 +77,7 @@ def standardize_bom(df: pd.DataFrame, month: str, source_file_name: str) -> pd.D
     out = out.groupby(["month", "product_id", "material_id"], as_index=False).agg({
         "material_name": "first",
         "material_group": "first",
+        "usage_type": "first",
         "unit_cost": "max",
         "unit_qty": "sum",
         "bom_amount": "sum",
