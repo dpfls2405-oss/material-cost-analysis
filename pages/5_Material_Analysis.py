@@ -79,12 +79,11 @@ with tab1:
         "actual_usage_qty", "expected_usage_qty", "usage_gap_qty",
     ]
     qty_existing = [c for c in qty_cols if c in qty_df.columns]
-    st.dataframe(
-        qty_df[qty_existing]
-        .sort_values("usage_gap_qty_abs", ascending=False)
-        .drop(columns=["usage_gap_qty_abs", "usage_gap_amount_abs"], errors="ignore"),
-        use_container_width=True,
-    )
+    display_qty = qty_df[qty_existing].copy()
+    display_qty = display_qty.iloc[
+        display_qty["usage_gap_qty"].abs().argsort()[::-1]
+    ] if "usage_gap_qty" in display_qty.columns and not display_qty.empty else display_qty
+    st.dataframe(display_qty, use_container_width=True)
 
 with tab2:
     st.subheader("구매금액 - BOM 예상소요금액 (금액 기준)")
@@ -122,12 +121,11 @@ with tab2:
         "usage_gap_amount",
     ]
     amt_existing = [c for c in amt_cols if c in amt_df.columns]
-    st.dataframe(
-        amt_df[amt_existing]
-        .sort_values("usage_gap_amount_abs", ascending=False)
-        .drop(columns=["usage_gap_qty_abs", "usage_gap_amount_abs"], errors="ignore"),
-        use_container_width=True,
-    )
+    display_amt = amt_df[amt_existing].copy()
+    display_amt = display_amt.iloc[
+        display_amt["usage_gap_amount"].abs().argsort()[::-1]
+    ] if "usage_gap_amount" in display_amt.columns and not display_amt.empty else display_amt
+    st.dataframe(display_amt, use_container_width=True)
 
 with tab3:
     st.subheader("BOM 기준 예상 소요량")

@@ -122,8 +122,11 @@ with tab1:
         show_cols = ["material_id", "material_name", "purchase_qty", "purchase_amount",
                      "expected_usage_qty", "expected_usage_amount", "usage_gap_amount"]
         existing = [c for c in show_cols if c in amt_df.columns]
+        _sorted_amt = amt_df.copy()
+        if "usage_gap_amount" in _sorted_amt.columns and not _sorted_amt.empty:
+            _sorted_amt = _sorted_amt.iloc[_sorted_amt["usage_gap_amount"].abs().argsort()[::-1]]
         st.dataframe(
-            amt_df[existing].head(50)
+            _sorted_amt[existing].head(50)
             .rename(columns={
                 "material_id": "자재ID", "material_name": "자재명",
                 "purchase_qty": "구매수량", "purchase_amount": "구매금액",
@@ -170,8 +173,11 @@ with tab2:
         show_cols_q = ["material_id", "material_name", "begin_qty", "purchase_qty",
                        "actual_usage_qty", "expected_usage_qty", "usage_gap_qty"]
         existing_q = [c for c in show_cols_q if c in qty_df.columns]
+        _sorted_qty = qty_df.copy()
+        if "usage_gap_qty" in _sorted_qty.columns and not _sorted_qty.empty:
+            _sorted_qty = _sorted_qty.iloc[_sorted_qty["usage_gap_qty"].abs().argsort()[::-1]]
         st.dataframe(
-            qty_df[existing_q].head(50)
+            _sorted_qty[existing_q].head(50)
             .rename(columns={
                 "material_id": "자재ID", "material_name": "자재명",
                 "begin_qty": "기초재고", "purchase_qty": "구매수량",
