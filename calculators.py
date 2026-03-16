@@ -115,6 +115,7 @@ def build_material_usage(purchase_df, inventory_begin_df, inventory_end_df) -> p
     end = inventory_end_df.copy()
     purchase = purchase_df.groupby(["month", "material_id"], as_index=False).agg(
         material_name=("material_name", "first"),
+        material_code=("material_code", "first"),   # [BUG FIX] BOM join용 순수 자재코드 보존
         purchase_qty=("purchase_qty", "sum"),
         purchase_amount=("purchase_amount", "sum"),
     )
@@ -130,14 +131,21 @@ def build_material_usage(purchase_df, inventory_begin_df, inventory_end_df) -> p
         frame["end_amount"] = np.nan
 
     frame["material_name"] = frame["material_name_begin"].fillna(frame["material_name"])
+    # [BUG FIX] material_code: begin 쪽 우선, 없으면 purchase 쪽 사용
+    if "material_code_begin" in frame.columns:
+        frame["material_code"] = frame["material_code_begin"].fillna(frame.get("material_code", np.nan))
     frame = frame.drop(columns=[c for c in frame.columns if c.endswith("_begin")], errors="ignore")
 
     # next month's begin as fallback end
     next_begin = begin[["month", "material_id", "begin_qty"]].copy()
     next_begin = next_begin.rename(columns={"month": "next_month", "begin_qty": "next_begin_qty"})
-    months = sorted(begin["month"].dropna().unique().tolist())
+    months = sorted(begin["month"].dropna().astype(str).unique().tolist())
     month_next_map = {months[i]: months[i + 1] for i in range(len(months) - 1)}
     frame["next_month"] = frame["month"].map(month_next_map)
+    # [BUG FIX] month_next_map이 비어있으면 .map() 결과가 float64(NaN)가 되어
+    # next_begin(str)과 merge 시 타입 충돌 → 명시적으로 str 캐스팅
+    frame["next_month"] = frame["next_month"].astype(str).replace("nan", np.nan)
+    next_begin["next_month"] = next_begin["next_month"].astype(str)
     frame = frame.merge(next_begin, on=["next_month", "material_id"], how="left")
     frame["calculated_end_qty"] = frame["end_qty"].fillna(frame["next_begin_qty"])
     frame["actual_usage_qty"] = frame["begin_qty"].fillna(0) + frame["purchase_qty"].fillna(0) - frame["calculated_end_qty"]
@@ -179,12 +187,39 @@ def build_material_analysis(purchase_df, inventory_begin_df, inventory_end_df, b
         bom_df = pd.DataFrame()
     if receipt_df is None:
         receipt_df = pd.DataFrame()
+
     usage = build_material_usage(purchase_df, inventory_begin_df, inventory_end_df)
     expected = build_bom_expected_usage(bom_df, receipt_df)
+
     if usage.empty and expected.empty:
         return pd.DataFrame()
-    out = usage.merge(expected, on=["month", "material_id"], how="outer", suffixes=("", "_exp"))
-    out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
+
+    # [BUG FIX] BOM의 material_id = 자재코드(색상 없음)
+    #           purchase/inventory의 material_id = 자재코드+색상
+    # => 직접 material_id로 outer join하면 매칭 0건 발생
+    # => usage 쪽에서 material_code(순수 자재코드)를 join 키로 사용해 BOM과 연결
+    if not usage.empty and "material_code" in usage.columns:
+        # material_code 기준으로 purchase_amount, actual_usage_qty를 집계
+        usage_agg = usage.groupby(["month", "material_code"], as_index=False).agg(
+            material_id=("material_id", "first"),       # 색상 포함 원본 ID 보존
+            material_name=("material_name", "first"),
+            begin_qty=("begin_qty", "sum"),
+            purchase_qty=("purchase_qty", "sum"),
+            purchase_amount=("purchase_amount", "sum"),
+            actual_usage_qty=("actual_usage_qty", "sum"),
+        )
+        # expected의 material_id(= 자재코드)를 join 키로 사용
+        out = usage_agg.merge(
+            expected.rename(columns={"material_id": "material_code"}),
+            on=["month", "material_code"],
+            how="outer",
+            suffixes=("", "_exp"),
+        )
+        out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
+    else:
+        # usage에 material_code 컬럼이 없는 경우 기존 방식 fallback
+        out = usage.merge(expected, on=["month", "material_id"], how="outer", suffixes=("", "_exp"))
+        out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
 
     # 수량 GAP: 실사용량 - BOM 예상소요량
     out["usage_gap_qty"] = out["actual_usage_qty"] - out["expected_usage_qty"]

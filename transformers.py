@@ -51,10 +51,20 @@ def standardize_receipt(df: pd.DataFrame, month: str, source_file_name: str) -> 
     return out
 
 def standardize_material_cost(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # [BUG FIX] product_id: 코드+색상 조합 (receipt_performance와 동일한 방식으로 매칭)
+    # 기존 코드는 "코드"만 사용해 receipt(단품코드+색상)와 join 시 매칭 0건 발생
+    if "색상" in df.columns:
+        product_id = (
+            normalize_text(df["코드"]).fillna("") +
+            normalize_text(df["색상"].astype(str)).fillna("")
+        )
+    else:
+        product_id = normalize_text(df["코드"])
+
     ratio_col = "제조원가율" if "제조원가율" in df.columns else None
     out = pd.DataFrame({
         "month": month,
-        "product_id": normalize_text(df["코드"]),
+        "product_id": product_id,
         "product_name": normalize_text(df["단품명칭"]),
         "material_cost": to_number(df["총자재비"]),
         "manufacturing_cost": to_number(df["제조원가"]) if "제조원가" in df.columns else None,
@@ -141,9 +151,23 @@ def standardize_purchase(df: pd.DataFrame, month: str, source_file_name: str) ->
     return out
 
 def standardize_inventory_begin(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # [BUG FIX] material_id: 자재코드+색상 조합 (purchase와 동일한 방식으로 매칭)
+    # 기존 코드는 "자재코드"만 사용해 purchase(자재코드+색상)와 join 시 매칭 1건/3390건 발생
+    if "색상" in df.columns:
+        material_id = (
+            normalize_text(df["자재코드"]).fillna("") +
+            normalize_text(df["색상"].astype(str)).fillna("")
+        )
+        color = normalize_text(df["색상"].astype(str))
+    else:
+        material_id = normalize_text(df["자재코드"])
+        color = None
+
     out = pd.DataFrame({
         "month": month,
-        "material_id": normalize_text(df["자재코드"]),
+        "material_id": material_id,
+        "material_code": normalize_text(df["자재코드"]),
+        "material_color": color,
         "material_name": normalize_text(df["자재명"]),
         "begin_qty": to_number(df["현재고"]),
         "begin_amount": to_number(df["현재고금액"]),
@@ -152,6 +176,8 @@ def standardize_inventory_begin(df: pd.DataFrame, month: str, source_file_name: 
         "source_file_name": source_file_name,
     })
     out = out.groupby(["month", "material_id"], as_index=False).agg({
+        "material_code": "first",
+        "material_color": "first",
         "material_name": "first",
         "begin_qty": "sum",
         "begin_amount": "sum",
@@ -162,9 +188,22 @@ def standardize_inventory_begin(df: pd.DataFrame, month: str, source_file_name: 
     return out
 
 def standardize_inventory_end(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # [BUG FIX] material_id: 자재코드+색상 조합 (purchase, inventory_begin과 동일한 방식으로 매칭)
+    if "색상" in df.columns:
+        material_id = (
+            normalize_text(df["자재코드"]).fillna("") +
+            normalize_text(df["색상"].astype(str)).fillna("")
+        )
+        color = normalize_text(df["색상"].astype(str))
+    else:
+        material_id = normalize_text(df["자재코드"])
+        color = None
+
     out = pd.DataFrame({
         "month": month,
-        "material_id": normalize_text(df["자재코드"]),
+        "material_id": material_id,
+        "material_code": normalize_text(df["자재코드"]),
+        "material_color": color,
         "material_name": normalize_text(df["자재명"]),
         "end_qty": to_number(df["현재고"]),
         "end_amount": to_number(df["현재고금액"]),
@@ -173,6 +212,8 @@ def standardize_inventory_end(df: pd.DataFrame, month: str, source_file_name: st
         "source_file_name": source_file_name,
     })
     out = out.groupby(["month", "material_id"], as_index=False).agg({
+        "material_code": "first",
+        "material_color": "first",
         "material_name": "first",
         "end_qty": "sum",
         "end_amount": "sum",
