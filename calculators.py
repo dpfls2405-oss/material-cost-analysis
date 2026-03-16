@@ -113,9 +113,15 @@ def build_material_usage(purchase_df, inventory_begin_df, inventory_end_df) -> p
 
     begin = inventory_begin_df.copy()
     end = inventory_end_df.copy()
+
+    # Supabase 구버전 스키마에는 material_code 컬럼이 없을 수 있으므로 방어 처리
+    if "material_code" not in purchase_df.columns:
+        purchase_df = purchase_df.copy()
+        purchase_df["material_code"] = purchase_df["material_id"]
+
     purchase = purchase_df.groupby(["month", "material_id"], as_index=False).agg(
         material_name=("material_name", "first"),
-        material_code=("material_code", "first"),   # [BUG FIX] BOM join용 순수 자재코드 보존
+        material_code=("material_code", "first"),   # BOM join용 순수 자재코드 보존
         purchase_qty=("purchase_qty", "sum"),
         purchase_amount=("purchase_amount", "sum"),
     )
