@@ -200,30 +200,59 @@ def build_material_analysis(purchase_df, inventory_begin_df, inventory_end_df, b
     if usage.empty and expected.empty:
         return pd.DataFrame()
 
-    # [BUG FIX] BOM의 material_id = 자재코드(색상 없음)
-    #           purchase/inventory의 material_id = 자재코드+색상
-    # => 직접 material_id로 outer join하면 매칭 0건 발생
-    # => usage 쪽에서 material_code(순수 자재코드)를 join 키로 사용해 BOM과 연결
+    # BOM의 material_id = 자재코드(색상 없음)
+    # purchase/inventory의 material_id = 자재코드+색상
+    # => material_code(순수 자재코드) 기준으로 BOM expected를 join한 뒤
+    #    색상별 구매비율로 안분하여 material_id(색상별) 단위로 결과를 유지
     if not usage.empty and "material_code" in usage.columns:
-        # material_code 기준으로 purchase_amount, actual_usage_qty를 집계
-        usage_agg = usage.groupby(["month", "material_code"], as_index=False).agg(
-            material_id=("material_id", "first"),       # 색상 포함 원본 ID 보존
-            material_name=("material_name", "first"),
-            begin_qty=("begin_qty", "sum"),
-            purchase_qty=("purchase_qty", "sum"),
-            purchase_amount=("purchase_amount", "sum"),
-            actual_usage_qty=("actual_usage_qty", "sum"),
+
+        # ① material_code 기준 구매금액 합계 (안분 비율 계산용)
+        code_total = usage.groupby(["month", "material_code"], as_index=False).agg(
+            purchase_amount_total=("purchase_amount", "sum"),
+            actual_usage_qty_total=("actual_usage_qty", "sum"),
         )
-        # expected의 material_id(= 자재코드)를 join 키로 사용
-        out = usage_agg.merge(
-            expected.rename(columns={"material_id": "material_code"}),
+
+        # ② usage(색상별)에 code_total 붙이기
+        usage = usage.merge(code_total, on=["month", "material_code"], how="left")
+
+        # ③ BOM expected를 material_code 기준으로 join
+        expected_renamed = expected.rename(columns={"material_id": "material_code"})
+        usage = usage.merge(
+            expected_renamed[["month", "material_code", "material_name",
+                               "expected_usage_qty", "expected_usage_amount"]],
             on=["month", "material_code"],
-            how="outer",
+            how="left",
             suffixes=("", "_exp"),
         )
-        out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
+
+        # ④ BOM 예상금액/수량을 색상별 구매금액 비율로 안분
+        #    구매금액이 없는 경우(재고만 있는 경우) 동일 색상 수로 균등 분배
+        usage["_ratio_amount"] = (
+            usage["purchase_amount"].fillna(0)
+            / usage["purchase_amount_total"].replace(0, np.nan)
+        )
+        # 안분 비율이 없는 행(purchase_amount_total=0)은 색상 수로 균등 분배
+        color_count = usage.groupby(["month", "material_code"])["material_id"].transform("count")
+        usage["_ratio_amount"] = usage["_ratio_amount"].fillna(1.0 / color_count)
+
+        usage["expected_usage_qty"]    = usage["expected_usage_qty"].fillna(0)    * usage["_ratio_amount"]
+        usage["expected_usage_amount"] = usage["expected_usage_amount"].fillna(0) * usage["_ratio_amount"]
+
+        usage["material_name"] = usage["material_name"].fillna(usage.get("material_name_exp"))
+        usage = usage.drop(columns=["purchase_amount_total", "actual_usage_qty_total",
+                                     "_ratio_amount", "material_name_exp"], errors="ignore")
+        out = usage.copy()
+
+        # BOM에만 있고 purchase/inventory에 없는 자재는 별도 추가
+        bom_only = expected_renamed[
+            ~expected_renamed["material_code"].isin(usage["material_code"].dropna())
+        ].rename(columns={"material_code": "material_id"})
+        if not bom_only.empty:
+            bom_only["material_code"] = bom_only["material_id"]
+            out = pd.concat([out, bom_only], ignore_index=True)
+
     else:
-        # usage에 material_code 컬럼이 없는 경우 기존 방식 fallback
+        # material_code 컬럼이 없는 경우 기존 방식 fallback
         out = usage.merge(expected, on=["month", "material_id"], how="outer", suffixes=("", "_exp"))
         out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
 
