@@ -106,9 +106,22 @@ def standardize_bom(df: pd.DataFrame, month: str, source_file_name: str) -> pd.D
     return out
 
 def standardize_purchase(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # material_id: 자재코드+색상 조합으로 색상별 구분
+    if "색상" in df.columns:
+        material_id = (
+            normalize_text(df["자재코드"]).fillna("") +
+            normalize_text(df["색상"]).fillna("")
+        )
+        color = normalize_text(df["색상"])
+    else:
+        material_id = normalize_text(df["자재코드"])
+        color = None
+
     out = pd.DataFrame({
         "month": month,
-        "material_id": normalize_text(df["자재코드"]),
+        "material_id": material_id,
+        "material_code": normalize_text(df["자재코드"]),
+        "material_color": color,
         "material_name": normalize_text(df["자재명"]),
         "vendor_name": normalize_text(df["거래처명"]) if "거래처명" in df.columns else None,
         "purchase_qty": to_number(df["입고량"]),
@@ -117,6 +130,8 @@ def standardize_purchase(df: pd.DataFrame, month: str, source_file_name: str) ->
         "source_file_name": source_file_name,
     })
     out = out.groupby(["month", "material_id", "vendor_name"], as_index=False).agg({
+        "material_code": "first",
+        "material_color": "first",
         "material_name": "first",
         "purchase_qty": "sum",
         "purchase_amount": "sum",
@@ -175,3 +190,43 @@ TRANSFORMER_MAP = {
     "inventory_begin": standardize_inventory_begin,
     "inventory_end": standardize_inventory_end,
 }
+
+
+def standardize_jit_materials(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    """JIT 자재 목록 표준화 — 자재코드+색상 조합을 material_id로 사용"""
+    # 발주이력 원본에서 왔을 경우 필요한 컬럼 매핑
+    code_col = "자재코드"
+    color_col = "색상" if "색상" in df.columns else None
+    name_col = "자재명" if "자재명" in df.columns else "자재명칭"
+
+    if color_col:
+        material_id = (
+            normalize_text(df[code_col]).fillna("") +
+            normalize_text(df[color_col]).fillna("")
+        )
+        color = normalize_text(df[color_col])
+    else:
+        material_id = normalize_text(df[code_col])
+        color = None
+
+    out = pd.DataFrame({
+        "month": month,
+        "material_id": material_id,
+        "material_code": normalize_text(df[code_col]),
+        "material_color": color,
+        "material_name": normalize_text(df[name_col]),
+        "vendor_name": normalize_text(df["거래처명"]) if "거래처명" in df.columns else None,
+        "unit_cost": to_number(df["자재단가"]) if "자재단가" in df.columns else None,
+        "unit": normalize_text(df["단위"]) if "단위" in df.columns else None,
+        "order_policy": normalize_text(df["발주방침"]) if "발주방침" in df.columns else None,
+        "production_mgmt_no": normalize_text(df["생산관리번호"]) if "생산관리번호" in df.columns else None,
+        "source_file_name": source_file_name,
+    })
+
+    # 빈 material_id 제거 후 중복 제거 (같은 월 내 자재코드+색상 기준)
+    out = out[out["material_id"].str.strip() != ""]
+    out = out.drop_duplicates(subset=["month", "material_id"], keep="first")
+    return out.reset_index(drop=True)
+
+
+TRANSFORMER_MAP["jit_materials"] = standardize_jit_materials

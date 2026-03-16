@@ -10,6 +10,7 @@ DATASET_TYPES = [
     "purchase",
     "inventory_begin",
     "inventory_end",
+    "jit_materials",
 ]
 
 DISPLAY_NAMES = {
@@ -19,6 +20,7 @@ DISPLAY_NAMES = {
     "purchase": "구매",
     "inventory_begin": "기초재고",
     "inventory_end": "기말재고",
+    "jit_materials": "JIT 자재 목록",
 }
 
 TABLE_MAP = {
@@ -28,6 +30,7 @@ TABLE_MAP = {
     "purchase": "purchase",
     "inventory_begin": "inventory_begin",
     "inventory_end": "inventory_end",
+    "jit_materials": "jit_materials",
 }
 
 
