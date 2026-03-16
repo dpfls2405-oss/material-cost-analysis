@@ -220,6 +220,7 @@ def standardize_jit_materials(df: pd.DataFrame, month: str, source_file_name: st
         "unit": normalize_text(df["단위"]) if "단위" in df.columns else None,
         "order_policy": normalize_text(df["발주방침"]) if "발주방침" in df.columns else None,
         "production_mgmt_no": normalize_text(df["생산관리번호"]) if "생산관리번호" in df.columns else None,
+        "jit_reason": normalize_text(df["jit_reason"]) if "jit_reason" in df.columns else None,
         "source_file_name": source_file_name,
     })
 
