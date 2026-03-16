@@ -37,13 +37,50 @@ def waterfall_contribution(start_ratio: float, contrib_df: pd.DataFrame, end_rat
     return fig
 
 def line_product_metrics(product_df: pd.DataFrame):
-    melt = product_df.melt(
-        id_vars=["month"],
-        value_vars=["sales_amount", "material_cost", "receipt_qty"],
-        var_name="metric",
-        value_name="value",
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    # 왼쪽 Y축: 금액 (sales_amount, material_cost)
+    fig.add_trace(go.Scatter(
+        x=product_df["month"], y=product_df["sales_amount"],
+        name="매출금액", mode="lines+markers",
+        line=dict(color="#1f77b4", width=2),
+        yaxis="y1",
+    ))
+    fig.add_trace(go.Scatter(
+        x=product_df["month"], y=product_df["material_cost"],
+        name="재료비", mode="lines+markers",
+        line=dict(color="#00bcd4", width=2),
+        yaxis="y1",
+    ))
+
+    # 오른쪽 Y축: 수량 (receipt_qty)
+    fig.add_trace(go.Scatter(
+        x=product_df["month"], y=product_df["receipt_qty"],
+        name="입고수량", mode="lines+markers",
+        line=dict(color="#e74c3c", width=2, dash="dot"),
+        yaxis="y2",
+    ))
+
+    fig.update_layout(
+        title="품목 월별 추이",
+        xaxis=dict(title="월"),
+        yaxis=dict(
+            title="금액 (원)",
+            tickformat=",",
+            side="left",
+        ),
+        yaxis2=dict(
+            title="수량 (개)",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
     )
-    return px.line(melt, x="month", y="value", color="metric", markers=True, title="품목 월별 추이")
+    return fig
 
 def bar_material_gap(material_df: pd.DataFrame, title: str):
     chart_df = material_df.copy().sort_values("usage_gap_qty", ascending=False).head(20)

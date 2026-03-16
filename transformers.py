@@ -4,9 +4,29 @@ import pandas as pd
 from helpers import to_number, pct_to_float, normalize_text
 
 def standardize_receipt(df: pd.DataFrame, month: str, source_file_name: str) -> pd.DataFrame:
+    # product_id: 단품코드+색상 조합 (BOM과 동일한 방식으로 매칭되도록)
+    if "색상" in df.columns:
+        product_id = (
+            normalize_text(df["단품코드"]).fillna("") +
+            normalize_text(df["색상"]).fillna("")
+        )
+    else:
+        product_id = normalize_text(df["단품코드"])
+
+    # 빈 product_id 행 제거
+    df = df.copy()
+    df = df[product_id.str.strip() != ''].reset_index(drop=True)
+    if "색상" in df.columns:
+        product_id = (
+            normalize_text(df["단품코드"]).fillna("") +
+            normalize_text(df["색상"]).fillna("")
+        )
+    else:
+        product_id = normalize_text(df["단품코드"])
+
     out = pd.DataFrame({
         "month": month,
-        "product_id": normalize_text(df["단품코드"]),
+        "product_id": product_id,
         "product_name": normalize_text(df["단품명"]),
         "receipt_qty": to_number(df["입고수량"]),
         "sales_amount": to_number(df["입고금액"]),
