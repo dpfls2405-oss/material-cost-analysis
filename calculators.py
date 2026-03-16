@@ -185,7 +185,17 @@ def build_material_analysis(purchase_df, inventory_begin_df, inventory_end_df, b
         return pd.DataFrame()
     out = usage.merge(expected, on=["month", "material_id"], how="outer", suffixes=("", "_exp"))
     out["material_name"] = out["material_name"].fillna(out.get("material_name_exp"))
+
+    # 수량 GAP: 실사용량 - BOM 예상소요량
     out["usage_gap_qty"] = out["actual_usage_qty"] - out["expected_usage_qty"]
+
+    # 금액 GAP: 구매금액 - BOM 예상소요금액
+    out["usage_gap_amount"] = out["purchase_amount"].fillna(0) - out["expected_usage_amount"].fillna(0)
+
+    # 절대값 기준 정렬용
+    out["usage_gap_qty_abs"] = out["usage_gap_qty"].abs()
+    out["usage_gap_amount_abs"] = out["usage_gap_amount"].abs()
+
     return out
 
 

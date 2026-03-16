@@ -83,6 +83,49 @@ def line_product_metrics(product_df: pd.DataFrame):
     return fig
 
 def bar_material_gap(material_df: pd.DataFrame, title: str):
-    chart_df = material_df.copy().sort_values("usage_gap_qty", ascending=False).head(20)
-    fig = px.bar(chart_df, x="usage_gap_qty", y="material_name", orientation="h", title=title)
+    chart_df = material_df.copy()
+    chart_df = chart_df[chart_df["usage_gap_qty"].notna()]
+    chart_df = chart_df.reindex(chart_df["usage_gap_qty"].abs().sort_values(ascending=False).index).head(20)
+    chart_df = chart_df.sort_values("usage_gap_qty", ascending=True)
+    colors = ["#e74c3c" if v > 0 else "#2ecc71" for v in chart_df["usage_gap_qty"]]
+    fig = px.bar(
+        chart_df, x="usage_gap_qty", y="material_name",
+        orientation="h", title=title,
+        color="usage_gap_qty",
+        color_continuous_scale=["#2ecc71", "#f39c12", "#e74c3c"],
+        hover_data=["material_id", "actual_usage_qty", "expected_usage_qty"],
+    )
+    fig.update_layout(coloraxis_showscale=False)
+    return fig
+
+
+def bar_material_gap_amount(material_df: pd.DataFrame, title: str):
+    chart_df = material_df.copy()
+    chart_df = chart_df[chart_df["usage_gap_amount"].notna()]
+    chart_df = chart_df.reindex(chart_df["usage_gap_amount"].abs().sort_values(ascending=False).index).head(20)
+    chart_df = chart_df.sort_values("usage_gap_amount", ascending=True)
+    fig = px.bar(
+        chart_df, x="usage_gap_amount", y="material_name",
+        orientation="h", title=title,
+        color="usage_gap_amount",
+        color_continuous_scale=["#2ecc71", "#f39c12", "#e74c3c"],
+        hover_data=["material_id", "purchase_amount", "expected_usage_amount"],
+    )
+    fig.update_xaxes(tickformat=",")
+    fig.update_layout(coloraxis_showscale=False)
+    return fig
+
+
+def bar_bom_expected(material_df: pd.DataFrame, title: str):
+    """BOM 예상소요량 TOP 20 차트"""
+    chart_df = material_df.copy()
+    chart_df = chart_df[chart_df["expected_usage_qty"].notna() & (chart_df["expected_usage_qty"] > 0)]
+    chart_df = chart_df.sort_values("expected_usage_qty", ascending=True).tail(20)
+    fig = px.bar(
+        chart_df, x="expected_usage_qty", y="material_name",
+        orientation="h", title=title,
+        color_discrete_sequence=["#3498db"],
+        hover_data=["material_id", "expected_usage_amount"],
+    )
+    fig.update_xaxes(tickformat=",")
     return fig
