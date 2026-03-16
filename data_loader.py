@@ -15,6 +15,7 @@ _DATASET_KEYS = [
     "purchase",
     "inventory_begin",
     "inventory_end",
+    "jit_materials",
 ]
 
 
@@ -35,7 +36,6 @@ def load_local_raw_files() -> dict[str, pd.DataFrame]:
         except Exception:
             continue
     merged = {k: pd.concat(v, ignore_index=True) for k, v in result.items()}
-    # Fill missing keys with empty DataFrames
     for k in _DATASET_KEYS:
         merged.setdefault(k, pd.DataFrame())
     return merged
@@ -52,6 +52,7 @@ def load_standardized_data() -> dict[str, pd.DataFrame]:
                 "purchase": fetch_table("purchase"),
                 "inventory_begin": fetch_table("inventory_begin"),
                 "inventory_end": fetch_table("inventory_end"),
+                "jit_materials": fetch_table("jit_materials"),
             }
         except Exception as e:
             import streamlit as st
