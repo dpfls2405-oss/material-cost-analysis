@@ -44,10 +44,27 @@ def upsert_dataframe(dataset_type: str, df: pd.DataFrame) -> None:
     records = _sanitize_records(records)
     if not records:
         return
+    # on_conflict 키 매핑 (테이블별 unique 컬럼 지정)
+    on_conflict_map = {
+        "receipt_performance": "month,product_id",
+        "material_cost": "month,product_id",
+        "bom_monthly": "month,product_id,material_id",
+        "purchase": "month,material_id,vendor_name",
+        "inventory_begin": "month,material_id",
+        "inventory_end": "month,material_id",
+        "jit_materials": "month,material_id",
+    }
+    on_conflict = on_conflict_map.get(table_name)
+
     # Supabase upsert in chunks to avoid request size limits
     chunk_size = 500
     for i in range(0, len(records), chunk_size):
-        client.table(table_name).upsert(records[i:i + chunk_size]).execute()
+        q = client.table(table_name)
+        if on_conflict:
+            q = q.upsert(records[i:i + chunk_size], on_conflict=on_conflict)
+        else:
+            q = q.upsert(records[i:i + chunk_size])
+        q.execute()
 
 
 def insert_upload_log(
