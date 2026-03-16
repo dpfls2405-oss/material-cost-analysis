@@ -39,6 +39,10 @@ if uploaded_files:
             st.write(f"- 유형: `{DISPLAY_NAMES[dataset_type]}`")
             st.write(f"- 원본 row 수: `{summary['row_count']}`")
 
+            # 합계행 등 자동 제거된 행이 있으면 안내
+            if summary.get("dropped_count", 0) > 0:
+                st.info(f"ℹ️ 키 값이 없는 행(합계행 등) {summary['dropped_count']}건 자동 제거됨")
+
             if not summary["ok"]:
                 st.error("검증 실패")
                 if summary["missing_columns"]:
@@ -49,7 +53,9 @@ if uploaded_files:
                     insert_upload_log(month, dataset_type, uploaded_file.name, len(raw), "FAILED", str(summary))
                 continue
 
-            standardized = TRANSFORMER_MAP[dataset_type](raw, month, uploaded_file.name)
+            # summarize_validation에서 정제된 df 재사용 (재처리 불필요)
+            cleaned_raw = summary.get("cleaned_df", raw)
+            standardized = TRANSFORMER_MAP[dataset_type](cleaned_raw, month, uploaded_file.name)
             st.success("검증 통과")
             st.dataframe(standardized.head(10), use_container_width=True)
 
